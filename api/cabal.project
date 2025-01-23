@@ -1,4 +1,0 @@
-packages: postgrest.cabal
-tests: true
-package *
-  ghc-options: -split-sections
