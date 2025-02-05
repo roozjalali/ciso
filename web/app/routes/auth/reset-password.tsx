@@ -1,5 +1,6 @@
 import { json } from "@remix-run/node";
 import { Form, useActionData } from "@remix-run/react";
+import { resetPasswordSchema } from "~/lib/validations/auth";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -8,9 +9,11 @@ export const action = async ({ request }) => {
   const formData = await request.formData();
   const email = formData.get("email");
 
-  if (!email) {
+  const result = resetPasswordSchema.safeParse({ email });
+
+  if (!result.success) {
     return json(
-      { error: "Email is required" },
+      { error: result.error.issues[0].message },
       { status: 400 }
     );
   }

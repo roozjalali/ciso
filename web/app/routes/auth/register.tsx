@@ -1,26 +1,21 @@
 import { json } from "@remix-run/node";
 import { Form, useActionData } from "@remix-run/react";
+import { registerSchema } from "~/lib/validations/auth";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 
-export const action = async ({ request }) => {
+export const action = async ({ request }: { request: Request }) => {
   const formData = await request.formData();
   const email = formData.get("email");
   const password = formData.get("password");
   const confirmPassword = formData.get("confirmPassword");
 
-  // Basic validation
-  if (!email || !password || !confirmPassword) {
-    return json(
-      { error: "All fields are required" },
-      { status: 400 }
-    );
-  }
+  const result = registerSchema.safeParse({ email, password, confirmPassword });
 
-  if (password !== confirmPassword) {
+  if (!result.success) {
     return json(
-      { error: "Passwords do not match" },
+      { error: result.error.issues[0].message },
       { status: 400 }
     );
   }
