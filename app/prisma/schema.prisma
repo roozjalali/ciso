@@ -1,0 +1,371 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OWNER
+  MEMBER
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id                     String    @id @default(uuid())
+  name                   String
+  email                  String    @unique
+  emailVerified          DateTime?
+  password               String?
+  image                  String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @default(now())
+  invalid_login_attempts Int       @default(0)
+  lockedAt               DateTime?
+
+  teamMembers TeamMember[]
+  accounts    Account[]
+  sessions    Session[]
+  invitations Invitation[]
+}
+
+model Team {
+  id              String       @id @default(uuid())
+  name            String
+  slug            String       @unique
+  domain          String?      @unique
+  defaultRole     Role         @default(MEMBER)
+  billingId       String?
+  billingProvider String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @default(now())
+  members         TeamMember[]
+  invitations     Invitation[]
+  apiKeys         ApiKey[]
+
+  @@index([billingId])
+}
+
+model TeamMember {
+  id        String   @id @default(uuid())
+  teamId    String
+  userId    String
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id             String   @id @default(uuid())
+  teamId         String
+  email          String?
+  role           Role     @default(MEMBER)
+  token          String   @unique
+  expires        DateTime
+  invitedBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now())
+  sentViaEmail   Boolean  @default(true)
+  allowedDomains String[] @default([])
+
+  user User @relation(fields: [invitedBy], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, email])
+  @@index([email])
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  email     String
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  name       String
+  teamId     String
+  hashedKey  String    @unique
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+}
+
+model Subscription {
+  id         String    @id
+  customerId String
+  priceId    String
+  active     Boolean   @default(false)
+  startDate  DateTime
+  endDate    DateTime
+  cancelAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now())
+
+  @@index([customerId])
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  description String
+  features    String[]
+  image       String
+  name        String
+  created     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+  Price       Price[]
+}
+
+model Price {
+  id            String   @id @default(uuid())
+  billingScheme String
+  currency      String
+  serviceId     String
+  amount        Int?
+  metadata      Json
+  type          String
+  created       DateTime
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+model CVEMetadata {
+  cveId             String               @id @db.VarChar(20)
+  assignerOrgId     String               @db.VarChar(50)
+  state             String               @db.VarChar(20)
+  assignerShortName String               @db.VarChar(50)
+  dateReserved      DateTime             @db.Timestamptz
+  datePublished     DateTime             @db.Timestamptz
+  dateUpdated       DateTime             @db.Timestamptz
+  syncedAt          DateTime             @default(now())
+  affectedProducts  AffectedProducts[]
+  descriptions      Descriptions[]
+  problemTypes      ProblemTypes[]
+  providerMetadataCNA ProviderMetadataCNA?
+  references        References[]
+  problemTypesADP   ProblemTypesADP[]
+  metricsCVSS       MetricsCVSS?
+  metricsOther      MetricsOther?
+  providerMetadataADP ProviderMetadataADP?
+  adpTitle          ADPTitle?
+}
+
+model AffectedProducts {
+  affectedId   Int              @id @default(autoincrement())
+  cveId        String           @db.VarChar(20)
+  vendor       String           @db.VarChar(255)
+  product      String           @db.VarChar(255)
+  cveMetadata  CVEMetadata      @relation(fields: [cveId], references: [cveId])
+  productVersions ProductVersions[]
+}
+
+model ProductVersions {
+  versionId    Int              @id @default(autoincrement())
+  affectedId   Int
+  version      String           @db.VarChar(255)
+  status       String           @db.VarChar(20)
+  lessThan     String           @db.VarChar(255)
+  versionType  String           @db.VarChar(50)
+  affectedProducts AffectedProducts @relation(fields: [affectedId], references: [affectedId])
+}
+
+model Descriptions {
+  descriptionId Int         @id @default(autoincrement())
+  cveId         String      @db.VarChar(20)
+  lang          String      @db.VarChar(10)
+  value         String      @db.Text
+  cveMetadata   CVEMetadata @relation(fields: [cveId], references: [cveId])
+}
+
+model ProblemTypes {
+  problemTypeId           Int                      @id @default(autoincrement())
+  cveId                   String                   @db.VarChar(20)
+  cveMetadata             CVEMetadata              @relation(fields: [cveId], references: [cveId])
+  problemTypeDescriptions ProblemTypeDescriptions[]
+}
+
+model ProblemTypeDescriptions {
+  problemTypeDescriptionId Int          @id @default(autoincrement())
+  problemTypeId            Int
+  lang                     String       @db.VarChar(10)
+  description              String       @db.VarChar(255)
+  cweId                    String       @db.VarChar(20)
+  problemTypes             ProblemTypes @relation(fields: [problemTypeId], references: [problemTypeId])
+}
+
+model ProviderMetadataCNA {
+  providerMetadataCNAId Int         @id @default(autoincrement())
+  cveId                 String      @db.VarChar(20) @unique
+  orgId                 String      @db.VarChar(50)
+  shortName             String      @db.VarChar(50)
+  dateUpdated           DateTime    @db.Timestamptz
+  cveMetadata           CVEMetadata @relation(fields: [cveId], references: [cveId])
+}
+
+model References {
+  referenceId Int         @id @default(autoincrement())
+  cveId       String      @db.VarChar(20)
+  url         String      @db.VarChar(2048)
+  cveMetadata CVEMetadata @relation(fields: [cveId], references: [cveId])
+}
+
+model ProblemTypesADP {
+  problemTypeIdADP            Int                          @id @default(autoincrement())
+  cveId                       String                       @db.VarChar(20)
+  cveMetadata                 CVEMetadata                  @relation(fields: [cveId], references: [cveId])
+  problemTypeDescriptionsADP ProblemTypeDescriptionsADP[]
+}
+
+model ProblemTypeDescriptionsADP {
+  problemTypeDescriptionIdADP Int           @id @default(autoincrement())
+  problemTypeIdADP            Int
+  type                        String        @db.VarChar(50)
+  cweId                       String        @db.VarChar(20)
+  lang                        String        @db.VarChar(10)
+  description                 String        @db.Text
+  problemTypesADP             ProblemTypesADP @relation(fields: [problemTypeIdADP], references: [problemTypeIdADP])
+}
+
+model MetricsCVSS {
+  metricsCVSSId       Int         @id @default(autoincrement())
+  cveId               String      @db.VarChar(20) @unique
+  scope               String      @db.VarChar(20)
+  version             String      @db.VarChar(10)
+  baseScore           Decimal     @db.Decimal(3, 1)
+  attackVector        String      @db.VarChar(20)
+  baseSeverity        String      @db.VarChar(20)
+  vectorString        String      @db.VarChar(255)
+  integrityImpact     String      @db.VarChar(20)
+  userInteraction     String      @db.VarChar(20)
+  attackComplexity    String      @db.VarChar(20)
+  availabilityImpact  String      @db.VarChar(20)
+  privilegesRequired  String      @db.VarChar(20)
+  confidentialityImpact String      @db.VarChar(20)
+  cveMetadata         CVEMetadata @relation(fields: [cveId], references: [cveId])
+}
+
+model MetricsOther {
+  metricsOtherId Int             @id @default(autoincrement())
+  cveId          String          @db.VarChar(20) @unique
+  type           String          @db.VarChar(50)
+  timestamp      DateTime        @db.Timestamptz
+  id             String          @db.VarChar(20)
+  role           String          @db.VarChar(50)
+  version        String          @db.VarChar(20)
+  cveMetadata    CVEMetadata     @relation(fields: [cveId], references: [cveId])
+  metricsOtherOptions MetricsOtherOptions[]
+}
+
+model MetricsOtherOptions {
+  metricsOtherOptionsId Int          @id @default(autoincrement())
+  metricsOtherId        Int
+  optionName            String       @db.VarChar(50)
+  optionValue           String       @db.VarChar(50)
+  metricsOther          MetricsOther @relation(fields: [metricsOtherId], references: [metricsOtherId])
+}
+
+model ProviderMetadataADP {
+  providerMetadataADPId Int         @id @default(autoincrement())
+  cveId                 String      @db.VarChar(20) @unique
+  orgId                 String      @db.VarChar(50)
+  shortName             String      @db.VarChar(50)
+  dateUpdated           DateTime    @db.Timestamptz
+  cveMetadata           CVEMetadata @relation(fields: [cveId], references: [cveId])
+}
+
+model ADPTitle {
+  adpTitleId  Int         @id @default(autoincrement())
+  cveId       String      @db.VarChar(20) @unique
+  title       String      @db.VarChar(255)
+  cveMetadata CVEMetadata @relation(fields: [cveId], references: [cveId])
+}
+
+model jackson_store {
+  key        String    @id(map: "_jackson_store_key") @db.VarChar(1500)
+  value      String
+  iv         String?   @db.VarChar(64)
+  tag        String?   @db.VarChar(64)
+  createdAt  DateTime  @default(now()) @db.Timestamp(6)
+  modifiedAt DateTime? @db.Timestamp(6)
+  namespace  String?   @db.VarChar(256)
+
+  jackson_index jackson_index[]
+
+  @@index([namespace], map: "_jackson_store_namespace")
+  @@ignore
+}
+
+model jackson_index {
+  id       Int    @id(map: "_jackson_index_id") @default(autoincrement())
+  key      String @db.VarChar(1500)
+  storeKey String @db.VarChar(1500)
+
+  store jackson_store @relation(fields: [storeKey], references: [key], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([key], map: "_jackson_index_key")
+  @@index([key, storeKey], map: "_jackson_index_key_store")
+  @@ignore
+}
+
+model jackson_ttl {
+  key       String @id(map: "jackson_ttl_key") @db.VarChar(1500)
+  expiresAt BigInt
+
+  @@index([expiresAt], map: "_jackson_ttl_expires_at")
+  @@ignore
+}
